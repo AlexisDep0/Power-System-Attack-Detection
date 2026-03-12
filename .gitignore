@@ -1,0 +1,18 @@
+# --- MATLAB & Simulink ---
+*.asv              # Autosave files
+*.slxc             # Simulink Cache (Essential to ignore for Simulink models)
+*.mex* # Compiled MATLAB functions
+slprj/             # Simulink Project generation folder
+diag/              # Diagnostic reports
+*.log              # MATLAB log files
+
+# --- Python ---
+__pycache__/       # Python bytecode
+*.pyc              # Compiled Python files
+.venv/             # Virtual environments
+.ipynb_checkpoints/ # Jupyter Notebook checkpoints
+
+# --- Data & Large Files ---
+# Ignore generated CSVs so you only track scripts, not thousands of rows of data.
+*.csv
+*.mat
