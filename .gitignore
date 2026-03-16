@@ -16,3 +16,9 @@ __pycache__/       # Python bytecode
 # Ignore generated CSVs so you only track scripts, not thousands of rows of data.
 *.csv
 *.mat
+
+# Ignore simulation output folders
+sim_results_*/
+sim_output_combined.csv
+*.asv
+
