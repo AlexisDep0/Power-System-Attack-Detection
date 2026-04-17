@@ -8,8 +8,9 @@ To ensure the MATLAB Engine for Python communicates correctly, you must use thes
 
 * **Python:** 3.12.8
 * **MATLAB / Simulink:** R2024b
-* **Required MATLAB Toolboxes:** * Simscape
-    * Simscape Electrical (formerly SimPowerSystems)
+* **Required MATLAB Toolboxes:**
+   * Simscape
+   * Simscape Electrical (formerly SimPowerSystems)
 * **Operating System:** Windows 10/11
 
 ## 🚀 Setup Instructions
