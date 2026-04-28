@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 
+from mimic_attack import apply_sensor_attack
+
 # Setup folder
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 output_dir = f"sim_results_{timestamp}"
@@ -14,6 +16,7 @@ os.makedirs(output_dir, exist_ok=True)
 print("Starting MATLAB Engine... (this may take 30-60 seconds)")
 eng = matlab.engine.start_matlab()
 
+# all can be changed for different simulations
 fault_types = ['AG', 'BC', 'ABC', 'Normal']
 ron = 0.001
 rg = 0.01
@@ -93,6 +96,26 @@ for f_type in fault_types:
 # Combine and Save
 if all_scenarios_data:
     df = pd.concat(all_scenarios_data, ignore_index=True)
+
+    normal_data = df[df['Fault_Type'] == 'Normal'].copy()
+
+    attack_datasets = []
+
+    if not normal_data.empty:
+        print("Generating mimic attack data...\n")
+        attack_types = ['SLG_mimic', 'LL_mimic', 'ThreePhase_mimic']
+
+        for attack in attack_types:
+            attacked_df = apply_sensor_attack(normal_data, attack, start_time, stop_time)
+            attack_datasets.append(attacked_df)
+
+        # Combine all attacks
+        attack_df = pd.concat(attack_datasets, ignore_index=True)
+
+        # Merge with original dataset
+        df = pd.concat([df, attack_df], ignore_index=True)
+
+        print("Cyber-attack scenarios added to dataset.")
     
     # Calculate Power
     df['Pa'] = df['Va'] * df['Ia']
