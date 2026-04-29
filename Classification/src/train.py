@@ -2,77 +2,115 @@ import pandas as pd
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 
-def train_model(X: pd.DataFrame, y: pd.Series):
-    """
-    Trains a Random Forest model and prints:
-    - train/test split
-    - accuracy
-    - classification report
-    - confusion matrix
-    - 5-fold CV weighted F1
-    - top feature importances
-    """
-    label_encoder = LabelEncoder()
-    y_encoded = label_encoder.fit_transform(y)
+def train_two_models(X, y_fault, y_attack):
+    # =========================
+    # Encode labels
+    # =========================
+    fault_encoder = LabelEncoder()
+    attack_encoder = LabelEncoder()
 
-    X_train, X_test, y_train, y_test = train_test_split(
+    y_fault_encoded = fault_encoder.fit_transform(y_fault)
+    y_attack_encoded = attack_encoder.fit_transform(y_attack)
+
+    # =========================
+    # Same split for both tasks
+    # =========================
+    X_train, X_test, yf_train, yf_test, ya_train, ya_test = train_test_split(
         X,
-        y_encoded,
+        y_fault_encoded,
+        y_attack_encoded,
         test_size=0.2,
         random_state=42,
-        stratify=y_encoded
+        stratify=y_fault_encoded
     )
 
     print("\n=== TRAIN / TEST SPLIT ===")
     print("Train:", X_train.shape)
     print("Test :", X_test.shape)
 
-    model = RandomForestClassifier(
+    # =========================
+    # Fault model
+    # =========================
+    fault_model = RandomForestClassifier(
         n_estimators=400,
-        max_depth=None,
         random_state=42,
         class_weight="balanced",
         n_jobs=-1
     )
 
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+    fault_model.fit(X_train, yf_train)
+    yf_pred = fault_model.predict(X_test)
 
-    print("\n=== FINAL MODEL RESULTS ===")
-    print("Accuracy:", accuracy_score(y_test, y_pred))
+    print("\n==============================")
+    print("FAULT CLASSIFICATION RESULTS")
+    print("==============================")
+    print("Fault Accuracy:", accuracy_score(yf_test, yf_pred))
 
-    print("\n=== CLASSIFICATION REPORT ===")
-    print(classification_report(y_test, y_pred, target_names=label_encoder.classes_))
+    print("\n=== Fault Classification Report ===")
+    print(classification_report(
+        yf_test,
+        yf_pred,
+        target_names=fault_encoder.classes_
+    ))
 
-    cm = confusion_matrix(y_test, y_pred)
-    cm_df = pd.DataFrame(cm, index=label_encoder.classes_, columns=label_encoder.classes_)
+    fault_cm = confusion_matrix(yf_test, yf_pred)
+    fault_cm_df = pd.DataFrame(
+        fault_cm,
+        index=fault_encoder.classes_,
+        columns=fault_encoder.classes_
+    )
 
-    print("\n=== CONFUSION MATRIX ===")
-    print(cm_df)
+    print("\n=== Fault Confusion Matrix ===")
+    print(fault_cm_df)
 
-    cv_scores = cross_val_score(
-        model,
-        X,
-        y_encoded,
-        cv=5,
-        scoring="f1_weighted",
+    # =========================
+    # Attack model
+    # =========================
+    attack_model = RandomForestClassifier(
+        n_estimators=400,
+        random_state=42,
+        class_weight="balanced",
         n_jobs=-1
     )
 
-    print("\n=== 5-FOLD CROSS-VALIDATION (F1-WEIGHTED) ===")
-    print("Scores:", cv_scores)
-    print("Mean F1-weighted:", cv_scores.mean())
+    attack_model.fit(X_train, ya_train)
+    ya_pred = attack_model.predict(X_test)
 
-    importance_df = pd.DataFrame({
-        "Feature": X.columns,
-        "Importance": model.feature_importances_
-    }).sort_values(by="Importance", ascending=False)
+    print("\n==============================")
+    print("ATTACK CLASSIFICATION RESULTS")
+    print("==============================")
+    print("Attack Accuracy:", accuracy_score(ya_test, ya_pred))
 
-    print("\n=== TOP 15 FEATURE IMPORTANCES ===")
-    print(importance_df.head(15))
+    print("\n=== Attack Classification Report ===")
+    print(classification_report(
+        ya_test,
+        ya_pred,
+        target_names=attack_encoder.classes_
+    ))
 
-    return model, label_encoder, importance_df
+    attack_cm = confusion_matrix(ya_test, ya_pred)
+    attack_cm_df = pd.DataFrame(
+        attack_cm,
+        index=attack_encoder.classes_,
+        columns=attack_encoder.classes_
+    )
+
+    print("\n=== Attack Confusion Matrix ===")
+    print(attack_cm_df)
+
+    # =========================
+    # Joint accuracy
+    # =========================
+    joint_correct = (yf_pred == yf_test) & (ya_pred == ya_test)
+    joint_accuracy = joint_correct.mean()
+
+    print("\n==============================")
+    print("JOINT CLASSIFICATION RESULT")
+    print("==============================")
+    print("Joint Accuracy:", joint_accuracy)
+
+    return fault_model, attack_model

@@ -9,8 +9,8 @@ import pandas as pd
 
 @dataclass
 class WindowConfig:
-    window_size: int = 10
-    step_size: int = 1
+    window_size: int = 20
+    step_size: int = 10
     feature_columns: Tuple[str, ...] = (
         "Va", "Vb", "Vc",
         "Ia", "Ib", "Ic",
