@@ -2,58 +2,75 @@ import pandas as pd
 import numpy as np
 
 def apply_sensor_attack(df, attack_type, start_time, stop_time):
-    """
-    Injects cyber-layer manipulations into a 'Normal' dataset 
-    to mimic physical faults without physical consistency.
-    """
     attack_df = df.copy()
-    
-    # Matching the 0.05s window from your teammate's data_collection.py
-    # Note: data_collection uses variable start and stop time
-    mask = (attack_df['Time'] >= start_time) & (attack_df['Time'] <= stop_time)
 
+    # Ensure base labels exist
+    if 'attack_label' not in attack_df.columns:
+        attack_df['attack_label'] = np.where(attack_df['Fault_Type'] == 'Normal', 0, 1)
+
+    # Time mask
+    mask = (attack_df['Time'] >= start_time) & (attack_df['Time'] <= stop_time)
+    idx = attack_df.loc[mask].index
+
+    if len(idx) == 0:
+        return attack_df
+
+    # Smooth ramp
+    max_perturb = np.random.uniform(0.1, 0.35)
+    ramp = np.linspace(0, max_perturb, len(idx))
+
+    # Phase definitions
+    V_phases = ['Va', 'Vb', 'Vc']
+    I_phases = ['Ia', 'Ib', 'Ic']
+
+    # Detect if input already contains a fault
+    # .any() boils the whole column down to a single True or False
+    is_fault_data = (attack_df.loc[idx, 'attack_label'] == 1).any()
+
+    #FDIA logic
     if attack_type == 'SLG_mimic':
-        # Single Line-to-Ground: Mimic Phase A voltage dropping to near zero
-        # In a real fault, Ia would spike. In this attack, Ia stays normal.
-        attack_df.loc[mask, 'Va'] *= 0.05 
-        attack_df['Fault_Type'] = 'Attack_SLG'
-        
+        p = np.random.randint(0, 3)
+        attack_df.loc[idx, V_phases[p]] *= (1 - ramp)
+        attack_df.loc[idx, I_phases[p]] *= (1 - 0.3 * ramp)
+
     elif attack_type == 'LL_mimic':
-        # Line-to-Line: Mimic Phase A and B voltages dropping and converging
-        attack_df.loc[mask, 'Va'] *= 0.5
-        attack_df.loc[mask, 'Vb'] *= 0.5
-        attack_df['Fault_Type'] = 'Attack_LL'
+        phases = np.random.choice([0,1,2], size=2, replace=False)
+        for p in phases:
+            attack_df.loc[idx, V_phases[p]] *= (1 - ramp)
+            attack_df.loc[idx, I_phases[p]] *= (1 - 0.4 * ramp)
 
     elif attack_type == 'ThreePhase_mimic':
-        # Balanced Three-Phase: All voltages drop significantly
-        for phase in ['Va', 'Vb', 'Vc']:
-            attack_df.loc[mask, phase] *= 0.1
-        attack_df['Fault_Type'] = 'Attack_ABC'
+        for v, i in zip(V_phases, I_phases):
+            attack_df.loc[idx, v] *= (1 - ramp)
+            attack_df.loc[idx, i] *= (1 - 0.5 * ramp)
 
-    # RECALCULATE POWER: This is the "Tell" for the detection script
-    # Because V is low but I is normal, P will drop unnaturally.
+    elif attack_type == 'Drift':
+        drift = np.cumsum(np.random.normal(0, 0.0005, len(idx)))
+        for v in V_phases:
+            attack_df.loc[idx, v] += drift
+
+    elif attack_type == 'Fault_Mask':
+        for v, i in zip(V_phases, I_phases):
+            attack_df.loc[idx, v] *= (1 + ramp)
+            attack_df.loc[idx, i] *= (1 - 0.4 * ramp)
+
+    elif attack_type == 'Fault_Exaggerate':
+        for v, i in zip(V_phases, I_phases):
+            attack_df.loc[idx, v] *= (1 - ramp)
+            attack_df.loc[idx, i] *= (1 + 0.6 * ramp)
+
+    # Label assignment
+    if is_fault_data:
+        attack_df.loc[idx, 'attack_label'] = 3   # Fault + FDIA
+    else:
+        attack_df.loc[idx, 'attack_label'] = 2   # FDIA only
+
+    # ---------------------------
+    # Recompute power
+    # ---------------------------
     attack_df['Pa'] = attack_df['Va'] * attack_df['Ia']
     attack_df['Pb'] = attack_df['Vb'] * attack_df['Ib']
     attack_df['Pc'] = attack_df['Vc'] * attack_df['Ic']
     attack_df['P_Total'] = attack_df['Pa'] + attack_df['Pb'] + attack_df['Pc']
-    
-    # Binary Label: 1 means something is wrong (either fault or attack)
-    attack_df['Attack_Label'] = 1
-    
-    return attack_df
 
-# QUICK TEST WORKFLOW
-if __name__ == "__main__":
-    # 1. Load the "Normal" run from your teammate's output folder
-    try:
-        baseline = pd.read_csv('sim_results_TIMESTAMP/sim_output_combined.csv')
-        normal_data = baseline[baseline['Fault_Type'] == 'Normal']
-        
-        # 2. Generate a mimic attack
-        fdi_attack_data = apply_sensor_attack(normal_data, 'SLG_mimic')
-        
-        # 3. Save for the ML classifier
-        fdi_attack_data.to_csv('cyber_attack_dataset.csv', index=False)
-        print("Successfully generated cyber attack dataset.")
-    except Exception as e:
-        print(f"File not found. Make sure to run data_collection.py first! Error: {e}")
+    return attack_df

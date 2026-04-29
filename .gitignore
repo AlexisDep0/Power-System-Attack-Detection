@@ -9,6 +9,8 @@ diag/              # Diagnostic reports
 # --- Python ---
 __pycache__/       # Python bytecode
 *.pyc              # Compiled Python files
+*.pyo
+*.pyd
 .venv/             # Virtual environments
 venv/              # Virtual environments
 .ipynb_checkpoints/ # Jupyter Notebook checkpoints
