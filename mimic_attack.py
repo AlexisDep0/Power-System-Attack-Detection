@@ -61,10 +61,17 @@ def apply_sensor_attack(df, attack_type, start_time, stop_time):
 
     # Label assignment
     if is_fault_data:
-        attack_df.loc[idx, 'attack_label'] = 3   # Fault + FDIA
+        attack_df['attack_label'] = 3
+        
+        # Pull original fault (e.g., 'AG') to create 'AG_Fault_Mask'
+        original_f = attack_df['Fault_Type'].iloc[0]
+        attack_df['Fault_Type'] = f"{original_f}_{attack_type}"
     else:
-        attack_df.loc[idx, 'attack_label'] = 2   # FDIA only
-
+        #(Normal + FDIA)
+        attack_df['attack_label'] = 2
+        
+        # Result: 'Normal_Drift', 'Normal_SLG_mimic'
+        attack_df['Fault_Type'] = f"Normal_{attack_type}"
     # ---------------------------
     # Recompute power
     # ---------------------------

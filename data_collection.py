@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 
 from mimic_attack import apply_sensor_attack
-from plotting_utils import plot_scenario  # Ensure this file exists with the function
+from plotting_utils import plot_scenario  
 
 # Setup folder
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -19,10 +19,10 @@ eng = matlab.engine.start_matlab()
 
 # Simulation Parameters
 fault_types = ['AG', 'BC', 'ABC', 'Normal']
-ron = 1
-rg = 0.1
+ron = 5
+rg = 10
 start_time = 8
-stop_time = start_time + 0.07
+stop_time = start_time + 0.8
 
 all_scenarios_data = []
 
@@ -53,7 +53,6 @@ for f_type in fault_types:
             'attack_label': 0 if f_type == 'Normal' else 1
         })
 
-        # Plot Original Simulation
         plot_scenario(temp_df, f"Original: {f_type}", f"sim_{f_type}.png", output_dir, start_time)
         
         all_scenarios_data.append(temp_df)
@@ -63,7 +62,7 @@ for f_type in fault_types:
         print(f"Error running scenario {f_type}: {e}")
         continue
 
-# Combine and Process Attacks
+# --- PROCESSING BLOCK ---
 if all_scenarios_data:
     df = pd.concat(all_scenarios_data, ignore_index=True)
     attack_datasets = []
@@ -75,7 +74,6 @@ if all_scenarios_data:
         attack_types = ['SLG_mimic', 'LL_mimic', 'ThreePhase_mimic', 'Drift']
         for attack in attack_types:
             attacked_df = apply_sensor_attack(normal_data, attack, start_time, stop_time)
-            # Label 2 is handled inside mimic_attack, but plotting here:
             plot_scenario(attacked_df, f"Attack: {attack} on Normal", f"attack_2_Normal_{attack}.png", output_dir, start_time)
             attack_datasets.append(attacked_df)
 
@@ -85,38 +83,39 @@ if all_scenarios_data:
         print("Generating FDIA on Fault scenarios...")
         fault_attack_types = ['Fault_Mask', 'Fault_Exaggerate']
         
-        # Nested loop to ensure every fault type (AG, BC, ABC) is attacked separately
         for f_type in fault_data['Fault_Type'].unique():
             specific_f_df = fault_data[fault_data['Fault_Type'] == f_type].copy()
-            
             for attack in fault_attack_types:
                 attacked_f_df = apply_sensor_attack(specific_f_df, attack, start_time, stop_time)
-                
-                # Plot each specific fault + attack combination
                 plot_scenario(attacked_f_df, f"Attack: {attack} on {f_type}", f"attack_3_{f_type}_{attack}.png", output_dir, start_time)
                 attack_datasets.append(attacked_f_df)
 
-    # Combine all data
+    # --- FINAL COMBINATION AND CSV SAVING ---
+    # This block is now properly aligned to run after all loops finish
     if attack_datasets:
         df = pd.concat([df] + attack_datasets, ignore_index=True)
+        print("--- LABEL CHECK ---")
+        print(df['attack_label'].value_counts())
+    else:
+        print("WARNING: No attack datasets were generated!")
 
-    # Final Feature Engineering
-    print("Computing final power features...")
+    print("Computing final power and unbalance features...")
     df['Pa'] = df['Va'] * df['Ia']
     df['Pb'] = df['Vb'] * df['Ib']
     df['Pc'] = df['Vc'] * df['Ic']
     df['P_Total'] = df['Pa'] + df['Pb'] + df['Pc']
 
-    # Phase Unbalance
     v_cols = ['Va', 'Vb', 'Vc']
     df['V_Unbalance'] = df[v_cols].max(axis=1) - df[v_cols].min(axis=1)
 
-    # Grouped Moving Variance (prevents scenario bleeding)
+    print("Computing rolling variance features...")
     df['Va_Var'] = df.groupby(['Fault_Type', 'attack_label'])['Va'].transform(lambda x: x.rolling(5).var()).fillna(0)
     df['Ia_Var'] = df.groupby(['Fault_Type', 'attack_label'])['Ia'].transform(lambda x: x.rolling(5).var()).fillna(0)
 
-    df.to_csv(os.path.join(output_dir, 'sim_output_combined.csv'), index=False)
-    print(f"\nMaster dataset saved to {output_dir}/sim_output_combined.csv")
+    # Save to CSV
+    csv_filename = os.path.join(output_dir, 'sim_output_combined.csv')
+    df.to_csv(csv_filename, index=False)
+    print(f"\nSUCCESS: Master dataset saved to {csv_filename}")
 
 # Close Engine
 print("Shutting down MATLAB...")
